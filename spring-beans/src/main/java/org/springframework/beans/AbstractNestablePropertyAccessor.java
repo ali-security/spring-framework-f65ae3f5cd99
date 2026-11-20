@@ -656,6 +656,19 @@ public abstract class AbstractNestablePropertyAccessor extends AbstractPropertyA
 					else if (value instanceof List list) {
 						int index = Integer.parseInt(key);
 						growCollectionIfNecessary(list, index, indexedPropertyName.toString(), ph, i + 1);
+						// Reject an out-of-bounds index unless auto-growing is enabled and the index
+						// is within the limit, in which case the List may create the element on demand.
+						// The relaxation applies only to an explicitly configured limit: without
+						// spring-context's DirectFieldBindingResult limit propagation (30bdbb1438),
+						// an unbounded Integer.MAX_VALUE limit would let a self-populating List grow
+						// to any requested index, so that case keeps the strict bounds check.
+						if (index < 0 || (index >= list.size() &&
+								(!isAutoGrowNestedPaths() || this.autoGrowCollectionLimit == Integer.MAX_VALUE ||
+										index >= this.autoGrowCollectionLimit))) {
+							throw new InvalidPropertyException(getRootClass(), this.nestedPath + propertyName,
+									"Cannot get element with index " + index + " from List of size " +
+											list.size() + ", accessed using property path '" + propertyName + "'");
+						}
 						value = list.get(index);
 					}
 					else if (value instanceof Iterable iterable) {
